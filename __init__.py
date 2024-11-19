@@ -8,8 +8,8 @@ import bpy
 import os
 from functools import partial
 from bpy_extras.io_utils import ExportHelper
-from .asset_shelf import MTerrain_AST_Asset_Picker, OBJECT_OT_drag_drop_asset
-from .export import MTerrain_OT_ExportAsGLB
+from .asset_shelf import *
+from .export import *
 from .properties import *
 
 
@@ -368,14 +368,15 @@ class OBJECT_OT_convert_to_lod_object(bpy.types.Operator):
                 lod.mesh.name = obj.name + "_lod_0"
                 lod.lod = 0
             else:
-                lod.lod = int(lod.mesh.name.split("_lod_")[1])
+                lod.lod = int(lod.mesh.name.split("_lod_")[1].split(".")[0])
                 lod.mesh.name = obj.name + "_lod_" + str(lod.lod)
-            
+            set_count = len(lod.mesh.material_sets.sets)
             #materials = [mat for mat in lod.mesh.materials]                        
             validate_material_set_materials(lod.mesh, lod.mesh.material_sets.sets[0] )
-            for i in range(max(1, len(lod.mesh.materials))):
-                add_named_surface_to_mesh(lod.mesh)                     
-                lod.mesh.material_sets.sets[0].materials[i].material = lod.mesh.materials[i]                
+            #material_count = len(lod.mesh.material_sets.sets[0].materials)
+            #for i in range(max(1, len(lod.mesh.materials))):
+            #    add_named_surface_to_mesh(lod.mesh)                     
+            #    lod.mesh.material_sets.sets[0].materials[i].material = lod.mesh.materials[i]                
             with context.temp_override(object = obj):
                 bpy.ops.object.activate_mesh_lod(lod = lod.lod)
                 
@@ -460,7 +461,10 @@ def depsgraph_update_post(scene):
 
 classes= []
 props = []
+def menu_func_export(self, context):
+    self.layout.operator(MTerrain_OT_ExportAsGLB.bl_idname, text="Export MTerrain Assets (.glb)")
 
+addon_keymaps= []
 def register():
     classes = [        
         MeshLod,
@@ -500,8 +504,15 @@ def register():
     props = [bpy.types.WorkSpace.selected_asset, bpy.types.Mesh.material_sets, bpy.types.Scene.scene_objects]
     #bpy.types.ASSETSHELF_PT_display.append(MTerrain_PT_Tool.draw)
     bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
-
+    
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    # Asset Shelf
+    km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(name="Asset Shelf")
+    # Drag to blend pose.
+    kmi = km.keymap_items.new(OBJECT_OT_drag_drop_asset.bl_idname, "LEFTMOUSE", "CLICK_DRAG")    
+    addon_keymaps.append(km)
 def unregister():
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     for c in classes:
         bpy.utils.unregister_class(c)    
 
@@ -509,6 +520,9 @@ def unregister():
         del prop
     #bpy.types.ASSETSHELF_PT_display.remove(MTerrain_PT_Tool.draw)
     bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_post)    
+
+    bpy.context.window_manager.keyconfigs.addon.keymaps.remove(addon_keymaps[0])    
+
 if __name__ == "__main__":
     register()
 

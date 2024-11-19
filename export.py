@@ -4,7 +4,7 @@ from functools import partial
 from bpy_extras.io_utils import ExportHelper
 
 class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
-    """Export selected objects as scene, updating blend_path custom property"""
+    """Export lod assets with material sets and surface names, include blend_path custom property, hide collection_instances"""
     bl_idname = "mterrain.export_as_glb"
     bl_label = "Export assets and scenes to glb"
     bl_options = {'PRESET', 'UNDO'}
@@ -137,3 +137,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                 activate_material_set(obj, obj.mesh_lods.active_material_set)
                             
         return {'FINISHED'}
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+

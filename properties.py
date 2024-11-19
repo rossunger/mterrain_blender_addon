@@ -154,12 +154,17 @@ def validate_active_material_set(obj):
         else:
             obj.data.materials[i] = active_material_set.materials[i].material
 
-def validate_material_set_materials(mesh, material_set):
+def validate_material_set_materials(mesh, material_set):    
+    for i in range(max(0, len( mesh.materials) - len(mesh.material_sets.surface_names))):
+        mesh.material_sets.surface_names.add()            
     for i in range( abs(len( mesh.materials) - len(material_set.materials ))):
         if len( mesh.materials) < len(material_set.materials ):
             mesh.materials.append(None)
         else:
             material_set.materials.add()        
+            material_set.materials[-1].material = mesh.materials[i]
+    
+            mesh.material_sets.surface_names[i].value = mesh.materials[i].name
 
 
 def validate_material_set_count(obj_mesh_lods):        
