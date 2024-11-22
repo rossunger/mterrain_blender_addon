@@ -221,6 +221,16 @@ class MTerrain_PT_Tool(bpy.types.Panel):
             if obj.mesh_lods.material_sets_editable:
                 layout.operator(OBJECT_OT_AddMaterialSet.bl_idname, icon="ADD", text="")
             
+            col = layout.column(align=True)
+            col.label(text="Variations")
+            for variation in context.object.mesh_lods.variations:
+                row = col.row(align=True)                
+                if variation.obj != context.object:                                    
+                    row.context_pointer_set("new_object", variation.obj)
+                    row.operator(OBJECT_OT_activate_variation.bl_idname, text=variation.name )
+                    
+                    row.prop(variation, "new_obj", text="")
+
             #layout.label(text=str(obj.material_sets.sets))
             #for idx, array in enumerate(obj.material_sets.sets):          
                 #layout.label(text=str(array))
@@ -229,19 +239,19 @@ class MTerrain_PT_Tool(bpy.types.Panel):
             #     box = layout.box()
             #     row = box.row()
             #     row.label(text=f"Set {idx+1}")
-            #     row.operator("object.add_material_to_array", text="Add Material").array_index = idx
+            #     row.operator("mterrain.add_material_to_array", text="Add Material").array_index = idx
 
             #     # Display materials in the sub-array
             #     for mat_idx, mat_wrapper in enumerate(array.material_array):
             #         mat_row = box.row()
             #         mat_row.prop(mat_wrapper, "material", text=f"Material {mat_idx+1}")
-            #         mat_row.operator("object.remove_material_from_array", text="", icon="X").index = (idx, mat_idx)
+            #         mat_row.operator("mterrain.remove_material_from_array", text="", icon="X").index = (idx, mat_idx)
 
 #################
 # Material Sets #
 #################
 class OBJECT_OT_AddNamedSurface(bpy.types.Operator):
-    bl_idname = "object.add_named_surface_to_mesh"
+    bl_idname = "mterrain.add_named_surface_to_mesh"
     bl_label = "Add named surface to mesh"
     @classmethod 
     def poll(self, context):
@@ -252,7 +262,7 @@ class OBJECT_OT_AddNamedSurface(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_RemoveNamedSurface(bpy.types.Operator):
-    bl_idname = "object.remove_named_surface"
+    bl_idname = "mterrain.remove_named_surface"
     bl_label = "Remove named surface for object"
     
     surface_id: bpy.props.IntProperty()
@@ -296,7 +306,7 @@ def remove_named_surface(mesh, surface_id):
     mesh.materials.pop(index=surface_id)
 
 class OBJECT_OT_AddMaterialSet(bpy.types.Operator):
-    bl_idname = "object.add_material_set"
+    bl_idname = "mterrain.add_material_set"
     bl_label = "Add Material to Array"
     @classmethod 
     def poll(self, context):
@@ -307,7 +317,7 @@ class OBJECT_OT_AddMaterialSet(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_RemoveMaterialSet(bpy.types.Operator):
-    bl_idname = "object.remove_material_set"
+    bl_idname = "mterrain.remove_material_set"
     bl_label = "Remove Material set"
 
     set_id: bpy.props.IntProperty()
@@ -334,7 +344,7 @@ def remove_material_set(obj, set_id):
         
 
 class OBJECT_OT_ActivateMaterialSet(bpy.types.Operator):
-    bl_idname = "object.activate_material_set"
+    bl_idname = "mterrain.activate_material_set"
     bl_label = "Activate material set for object"
     
     set_id: bpy.props.IntProperty()
@@ -350,7 +360,7 @@ class OBJECT_OT_ActivateMaterialSet(bpy.types.Operator):
 # MESH LOD #
 ############
 class OBJECT_OT_convert_to_lod_object(bpy.types.Operator):
-    bl_idname = "object.convert_to_lod_object"
+    bl_idname = "mterrain.convert_to_lod_object"
     bl_label = "Convert object to lod"
     @classmethod
     def poll(self, context):
@@ -360,8 +370,11 @@ class OBJECT_OT_convert_to_lod_object(bpy.types.Operator):
         for obj in context.selected_objects:
             lod = obj.mesh_lods.lods.add()        
             obj.mesh_lods.lod_count += 1                        
+            self_variation = obj.mesh_lods.variations.add()
+            self_variation.name = obj.name
+            self_variation.obj = obj
             lod.mesh = obj.data.copy()
-            lod.mesh.use_fake_user = True
+            #lod.mesh.use_fake_user = True
             if len(obj.data.material_sets.sets) == 0:                
                 add_material_set(obj)
             if not "_lod_" in lod.mesh.name:
@@ -378,12 +391,12 @@ class OBJECT_OT_convert_to_lod_object(bpy.types.Operator):
             #    add_named_surface_to_mesh(lod.mesh)                     
             #    lod.mesh.material_sets.sets[0].materials[i].material = lod.mesh.materials[i]                
             with context.temp_override(object = obj):
-                bpy.ops.object.activate_mesh_lod(lod = lod.lod)
+                bpy.ops.mterrain.activate_mesh_lod(lod = lod.lod)
                 
         return {'FINISHED'}
 
 class OBJECT_OT_add_lod(bpy.types.Operator):
-    bl_idname = "object.add_mesh_lod"
+    bl_idname = "mterrain.add_mesh_lod"
     bl_label = "add mesh lod for object"
 
     @classmethod
@@ -395,14 +408,14 @@ class OBJECT_OT_add_lod(bpy.types.Operator):
         lod = context.object.mesh_lods.lods.add()        
         lod.lod = max(all_lod) + 1                        
         lod.mesh = context.object.data.copy()
-        lod.mesh.use_fake_user = True
+        #lod.mesh.use_fake_user = True
         lod.mesh.name = context.object.name + "_lod_" + str(lod.lod)
         context.object.mesh_lods.lod_count += 1
-        bpy.ops.object.activate_mesh_lod(lod = lod.lod)        
+        bpy.ops.mterrain.activate_mesh_lod(lod = lod.lod)        
         return {'FINISHED'}
 
 class OBJECT_OT_remove_mesh_lod(bpy.types.Operator):
-    bl_idname = "object.remove_mesh_lod"
+    bl_idname = "mterrain.remove_mesh_lod"
     bl_label = "remove mesh lod for object"    
     
     @classmethod
@@ -430,7 +443,7 @@ class OBJECT_OT_remove_mesh_lod(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_activate_lod(bpy.types.Operator):
-    bl_idname = "object.activate_mesh_lod"
+    bl_idname = "mterrain.activate_mesh_lod"
     bl_label = "Activate mesh lod for object"
     lod: bpy.props.IntProperty()
     
@@ -440,6 +453,55 @@ class OBJECT_OT_activate_lod(bpy.types.Operator):
 
     def execute(self, context):
         set_active_lod(context.object, self.lod)        
+        return {'FINISHED'}
+
+class OBJECT_OT_add_variation(bpy.types.Operator):
+    bl_idname = "mterrain.activate_variation"
+    bl_label = "Activate variation for object"    
+    
+    @classmethod
+    def poll(self, context):
+        return context.object #and len(context.object.mesh_lods.variations) > 0
+
+    def execute(self, context):
+        for obj in [variation.obj for variation in context.object.mesh_lods.variations]:
+            obj.mesh_lods.variations.add()            
+        return {'FINISHED'}
+
+class OBJECT_OT_remove_variation(bpy.types.Operator):
+    bl_idname = "mterrain.activate_variation"
+    bl_label = "Activate variation for object"    
+    
+    @classmethod
+    def poll(self, context):
+        return context.object #and len(context.object.mesh_lods.variations) > 0
+
+    def execute(self, context):
+        context.object.mesh_lods.variations.add()
+        return {'FINISHED'}
+
+
+class OBJECT_OT_activate_variation(bpy.types.Operator):
+    bl_idname = "mterrain.activate_variation"
+    bl_label = "Activate variation for object"    
+    
+    @classmethod
+    def poll(self, context):
+        return context.object and len(context.object.mesh_lods.variations) > 0
+
+    def execute(self, context):
+        if not context.new_object: return
+        target = context.new_object                            
+        obj = target.copy()
+        obj.location = context.object.location
+        obj.rotation_quaternion = context.object.rotation_quaternion
+        obj.scale = context.object.scale            
+        old_variation = obj.mesh_lods.variations.add()        
+        for col in target.users_collection:
+            col.objects.link(obj)
+            #bpy.data.objects.remove(context.object)
+            col.objects.unlink(context.object)
+        
         return {'FINISHED'}
 
 def depsgraph_update_post(scene):        
@@ -467,8 +529,10 @@ def menu_func_export(self, context):
 addon_keymaps= []
 def register():
     classes = [        
+        VariationObject,        
         MeshLod,
         MeshLods,
+        
         OBJECT_OT_convert_to_lod_object,
         OBJECT_OT_add_lod,
         OBJECT_OT_remove_mesh_lod,
@@ -489,6 +553,10 @@ def register():
         OBJECT_OT_RemoveMaterialSet,
         OBJECT_OT_ActivateMaterialSet,
 
+        OBJECT_OT_add_variation,
+        OBJECT_OT_remove_variation,
+        OBJECT_OT_activate_variation,
+
         MTerrain_AST_Asset_Picker,      
         OBJECT_OT_drag_drop_asset
     ]                
@@ -500,7 +568,7 @@ def register():
     )       
     bpy.types.Scene.scene_objects = bpy.props.StringProperty()
     bpy.types.Mesh.material_sets = bpy.props.PointerProperty(type=MaterialSets) 
-    bpy.types.Object.mesh_lods = bpy.props.PointerProperty(type=MeshLods)         
+    bpy.types.Object.mesh_lods = bpy.props.PointerProperty(type=MeshLods)             
     props = [bpy.types.WorkSpace.selected_asset, bpy.types.Mesh.material_sets, bpy.types.Scene.scene_objects]
     #bpy.types.ASSETSHELF_PT_display.append(MTerrain_PT_Tool.draw)
     bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
@@ -509,8 +577,9 @@ def register():
     # Asset Shelf
     km = bpy.context.window_manager.keyconfigs.addon.keymaps.new(name="Asset Shelf")
     # Drag to blend pose.
-    kmi = km.keymap_items.new(OBJECT_OT_drag_drop_asset.bl_idname, "LEFTMOUSE", "CLICK_DRAG")    
+    kmi = km.keymap_items.new("mterrain.drag_drop_asset", "LEFTMOUSE", "CLICK_DRAG")    
     addon_keymaps.append(km)
+
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     for c in classes:

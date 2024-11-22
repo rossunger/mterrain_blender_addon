@@ -16,6 +16,47 @@ class MaterialSets(bpy.types.PropertyGroup):
     collapsed_panels: bpy.props.BoolVectorProperty()
     #surfaces_editable: bpy.props.BoolProperty(default=True)
 
+class VariationObject(bpy.types.PropertyGroup):
+    def update_obj(self, context):        
+        if self.new_obj == self.obj: return
+
+
+        ##############################################################
+        # 1. Ensure new object is NOT also from this variation group #
+        ##############################################################        
+        if self.obj:
+            if self.new_obj and len(self.new_obj.mesh_lods.variations) == len(self.obj.mesh_lods.variations):
+                if self.new_obj.mesh_lods.variations[0] in self.obj.mesh_lods.variations:
+                    self.new_obj = self.obj                    
+                    return        
+        ###########################################
+        # 2. Clear the variations for the old obj #
+        ###########################################        
+            self.obj.mesh_lods.variations.clear()  
+            
+        ########################################
+        # 3. Replace the variation in each obj #
+        ########################################
+        for variation in context.object.mesh_lods.variations:
+            if variation.obj == self.obj:
+                variation.obj = self.new_obj
+                variation.new_obj = self.new_obj
+            
+        #########################################
+        # 4. Update new object's variation list #
+        #########################################
+        if self.new_obj:  
+            self.new_obj.mesh_lods.variations.clear()
+            for variation in context.object.mesh_lods.variations:
+                new_variation = self.new_obj.mesh_lods.variations.add()
+                new_variation.name = variation.name
+                new_variation.obj = variation.obj
+                new_variation.new_obj = variation.obj
+
+        self.obj = self.new_obj        
+
+    new_obj: bpy.props.PointerProperty(type=bpy.types.Object, update=update_obj)    
+    obj:bpy.props.PointerProperty(type=bpy.types.Object)    
 class MeshLod(bpy.types.PropertyGroup):
     mesh: bpy.props.PointerProperty(type=bpy.types.Mesh)    
     def on_update_lod(self, context):              
@@ -70,7 +111,9 @@ class MeshLods(bpy.types.PropertyGroup):
     lod_count: bpy.props.IntProperty(default=0)
     lods_editable: bpy.props.BoolProperty(default =True)
     material_sets_editable: bpy.props.BoolProperty(default =True)
-        
+    
+    variations: bpy.props.CollectionProperty(type=VariationObject)
+    
     def replace_lod_mesh(self, context):
         if self.object_for_replacing_lod_mesh == None: return        
         target_lod = [lod for lod in self.lods if lod.lod == self.active_lod][0]        
@@ -104,7 +147,7 @@ def activate_material_set(obj, set_id):
       
 
 def confirm_or_make_overrides(obj,new_lod):    
-    if not obj.override_library and not obj.library:         
+    if True or (not obj.override_library and not obj.library):         
         return obj
     new_obj = obj
     if not obj.override_library:        
