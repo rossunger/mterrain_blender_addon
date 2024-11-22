@@ -2,7 +2,7 @@ import bpy
 import os
 from functools import partial
 from bpy_extras.io_utils import ExportHelper
-
+from .properties import activate_material_set
 class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
     """Export lod assets with material sets and surface names, include blend_path custom property, hide collection_instances"""
     bl_idname = "mterrain.export_as_glb"
