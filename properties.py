@@ -1,4 +1,5 @@
 import bpy
+import bpy_extras
 
 class StringItem(bpy.types.PropertyGroup):
     value: bpy.props.StringProperty(name="Value")
@@ -9,54 +10,19 @@ class MaterialItem(bpy.types.PropertyGroup):
 class MaterialSet(bpy.types.PropertyGroup):
     materials: bpy.props.CollectionProperty(type=MaterialItem)
     name: bpy.props.StringProperty(default="material set")
+    material_set_id: bpy.props.IntProperty(min=0)
 
 class MaterialSets(bpy.types.PropertyGroup):
     surface_names: bpy.props.CollectionProperty(type=StringItem)    
     sets: bpy.props.CollectionProperty(type=MaterialSet)    
     collapsed_panels: bpy.props.BoolVectorProperty()
+    next_material_set_id: bpy.props.IntProperty(min=0)
     #surfaces_editable: bpy.props.BoolProperty(default=True)
 
-class VariationObject(bpy.types.PropertyGroup):
-    def update_obj(self, context):        
-        if self.new_obj == self.obj: return
+class VariationObject(bpy.types.PropertyGroup):        
+    obj:bpy.props.PointerProperty(type=bpy.types.Object) 
+    name: bpy.props.StringProperty()
 
-
-        ##############################################################
-        # 1. Ensure new object is NOT also from this variation group #
-        ##############################################################        
-        if self.obj:
-            if self.new_obj and len(self.new_obj.mesh_lods.variations) == len(self.obj.mesh_lods.variations):
-                if self.new_obj.mesh_lods.variations[0] in self.obj.mesh_lods.variations:
-                    self.new_obj = self.obj                    
-                    return        
-        ###########################################
-        # 2. Clear the variations for the old obj #
-        ###########################################        
-            self.obj.mesh_lods.variations.clear()  
-            
-        ########################################
-        # 3. Replace the variation in each obj #
-        ########################################
-        for variation in context.object.mesh_lods.variations:
-            if variation.obj == self.obj:
-                variation.obj = self.new_obj
-                variation.new_obj = self.new_obj
-            
-        #########################################
-        # 4. Update new object's variation list #
-        #########################################
-        if self.new_obj:  
-            self.new_obj.mesh_lods.variations.clear()
-            for variation in context.object.mesh_lods.variations:
-                new_variation = self.new_obj.mesh_lods.variations.add()
-                new_variation.name = variation.name
-                new_variation.obj = variation.obj
-                new_variation.new_obj = variation.obj
-
-        self.obj = self.new_obj        
-
-    new_obj: bpy.props.PointerProperty(type=bpy.types.Object, update=update_obj)    
-    obj:bpy.props.PointerProperty(type=bpy.types.Object)    
 class MeshLod(bpy.types.PropertyGroup):
     mesh: bpy.props.PointerProperty(type=bpy.types.Mesh)    
     def on_update_lod(self, context):              
@@ -106,7 +72,7 @@ class MeshLod(bpy.types.PropertyGroup):
 class MeshLods(bpy.types.PropertyGroup):
     lods: bpy.props.CollectionProperty(type=MeshLod)        
     active_lod: bpy.props.IntProperty(default=0, name="active_lod", override={"LIBRARY_OVERRIDABLE"})    
-    active_material_set: bpy.props.IntProperty(default=0, override={"LIBRARY_OVERRIDABLE"})
+    active_material_set_id: bpy.props.IntProperty(default=0, override={"LIBRARY_OVERRIDABLE"})
     material_set_count: bpy.props.IntProperty(default=0)
     lod_count: bpy.props.IntProperty(default=0)
     lods_editable: bpy.props.BoolProperty(default =True)
@@ -134,16 +100,18 @@ class MeshLods(bpy.types.PropertyGroup):
 ######################
 # ACTIVATE FUNCTIONS #
 ######################
+def get_material_set_by_id(material_sets, id):
+    return [material_set for material_set in material_sets if material_set.material_set_id == id][0]
 
-def activate_material_set(obj, set_id):                
+def activate_material_set(obj, set_id):       
+    material_set = get_material_set_by_id(obj.data.material_sets.sets,set_id)         
     validate_material_set_count(obj.mesh_lods)
-    validate_material_set_materials(obj.data, obj.data.material_sets.sets[set_id])
-    if len(obj.data.material_sets.sets) < set_id:
-        return #ERROR 
-    obj.mesh_lods.active_material_set = set_id
+    validate_material_set_materials(obj.data, material_set)
+    if not material_set: return 
+    obj.mesh_lods.active_material_set_id = material_set.material_set_id
     for i, slot in enumerate(obj.material_slots):
         if not slot.is_property_readonly("material"):            
-            slot.material = obj.data.material_sets.sets[set_id].materials[i].material
+            slot.material = material_set.materials[i].material
       
 
 def confirm_or_make_overrides(obj,new_lod):    
@@ -168,12 +136,12 @@ def confirm_or_make_overrides(obj,new_lod):
     # new_prop.operations.add("REPLACE")
 
 def set_active_lod(obj, lod):    
-    if not obj.type == 'MESH': return        
-    new_obj = confirm_or_make_overrides(obj,lod)
-    mesh = [x for x in new_obj.mesh_lods.lods if x.lod == lod][0].mesh    
+    if not obj.type == 'MESH': return      
+    new_obj = confirm_or_make_overrides(obj,lod)    
+    mesh = [x for x in new_obj.mesh_lods.lods if x.lod == lod][0].mesh        
     new_obj.data = mesh
     new_obj.mesh_lods.active_lod = lod
-    activate_material_set(obj, obj.mesh_lods.active_material_set)
+    activate_material_set(obj, obj.mesh_lods.active_material_set_id)
 
 
 
@@ -188,7 +156,7 @@ def validate_active_lod(obj):
 
 def validate_active_material_set(obj):    
     validate_active_lod(obj)
-    active_material_set = obj.data.material_sets.sets[obj.mesh_lods.active_material_set]
+    active_material_set = obj.data.material_sets.sets[obj.mesh_lods.active_material_set_id]
     validate_material_set_materials(obj.data, active_material_set )
     for i in range(len(active_material_set.materials)):
         #if obj.data.materials[i] != None:
@@ -198,6 +166,12 @@ def validate_active_material_set(obj):
             obj.data.materials[i] = active_material_set.materials[i].material
 
 def validate_material_set_materials(mesh, material_set):    
+    #############################
+    # ensure parity for:        #
+    # 1. mesh's material        #
+    # 2. surface_names          #
+    # 3. material_set materials #
+    #############################
     for i in range(max(0, len( mesh.materials) - len(mesh.material_sets.surface_names))):
         mesh.material_sets.surface_names.add()            
     for i in range( abs(len( mesh.materials) - len(material_set.materials ))):
@@ -205,9 +179,11 @@ def validate_material_set_materials(mesh, material_set):
             mesh.materials.append(None)
         else:
             material_set.materials.add()        
-            material_set.materials[-1].material = mesh.materials[i]
-    
-            mesh.material_sets.surface_names[i].value = mesh.materials[i].name
+            if mesh.materials[i]:
+                material_set.materials[-1].material = mesh.materials[i]    
+                mesh.material_sets.surface_names[i].value = mesh.materials[i].name
+            else:
+                mesh.material_sets.surface_names[i].value = "surface"
 
 
 def validate_material_set_count(obj_mesh_lods):        
@@ -217,7 +193,12 @@ def validate_material_set_count(obj_mesh_lods):
         set_count_data.append({"lod": lod, "count": len(lod.mesh.material_sets.sets)})
         obj_mesh_lods.material_set_count = max(obj_mesh_lods.material_set_count, set_count_data[i]['count'])    
     for lod in [data['lod'] for data in set_count_data if data['count'] < obj_mesh_lods.material_set_count ]:        
-        lod.mesh.material_sets.sets.add()                                                
+        material_set = lod.mesh.material_sets.sets.add() 
+        i = 0
+        while get_material_set_by_id(lod.mesh.material_sets, i):
+            i+= 1
+        material_set.material_set_id = i                                
+        material_set.name = "set " + str(i)
 
 
 def validate_surface_count(mesh):    

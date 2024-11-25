@@ -28,9 +28,17 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                 for col in obj.users_collection:
                     if col.asset_data:
                         obj.select_set(True)
+        variation_groups = []        
+        variation_objects_process = []
         material_to_delete = []
         objects_to_delete = []
-        for obj in original_selection:       
+        for obj in context.scene.objects:                   
+            if not obj.name in variation_objects_process:
+                variation_group = [v.name for v in obj.mesh_lods.variations]
+                variation_group.append(obj.name)
+                variation_objects_process += variation_group
+                variation_groups.append(variation_group)
+        for obj in context.scene.objects:                               
             #######################
             # Process Collections #
             #######################     
@@ -48,7 +56,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                 new_obj = bpy.data.objects.new(obj_name, None)
                 new_obj.select_set(True)
                 new_obj['blend_file'] = obj.override_library.reference.library.name
-                new_obj['active_material_set'] = obj.mesh_lods.active_material_set
+                new_obj['active_material_set_id'] = obj.mesh_lods.active_material_set_id
                 obj.select_set(false)
                 objects_to_delete.append(new_obj)
                 pass
@@ -89,7 +97,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                                 else:
                                     material_array.append("")
                             material_sets.append(material_array)
-                        new_object['material_sets'] = material_sets                                                
+                        new_object['material_sets'] = material_sets                           
             
             ###########################
             # Add Tags to collections #
@@ -99,7 +107,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                     obj['tags'] = [tag.name for tag in col.asset_data.tags]                 
                     break
         
-
+        context.scene['variation_groups'] = variation_groups
         ##########
         # EXPORT #
         ##########
@@ -120,6 +128,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
         #############################
         # Restore original settings #
         #############################
+        bpy.ops.object.select_all(action="DESELECT")
         for obj in objects_to_delete:
             bpy.data.objects.remove(obj)
         for material in material_to_delete:
@@ -134,7 +143,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
             else:
                 obj.select_set(True)
             if obj.type == 'MESH':
-                activate_material_set(obj, obj.mesh_lods.active_material_set)
+                activate_material_set(obj, obj.mesh_lods.active_material_set_id)
                             
         return {'FINISHED'}
     def invoke(self, context, event):
