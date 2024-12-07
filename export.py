@@ -64,14 +64,14 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
             ########################
             # Process Mesh objects #
             ########################                            
-            elif obj.type =="MESH":                                             
+            elif obj.type =="MESH":                  
+                #use_vertex_color_for_surfaces = len(context.scene.color_palette.colors) > 0                
                 # Split lod meshes into separate objects
                 if len(obj.mesh_lods.lods) > 0:                    
                     obj.select_set(False)
                     for i, meshlod in enumerate(obj.mesh_lods.lods):
                         new_object_name = obj.name + "_lod_" + str(meshlod.lod)
-                        new_object = bpy.data.objects.new(new_object_name, meshlod.mesh)                                                  
-                        #new_object.parent = obj.parent
+                        new_object = bpy.data.objects.new(new_object_name, meshlod.mesh)                                                                          
                         objects_to_delete.append(new_object)
                         # Replace materials with temporary ones that have the correct slot names
                         for i, slot in enumerate(new_object.material_slots):            
@@ -105,8 +105,8 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
             for col in obj.users_collection:
                 if col.asset_data and obj.name in col.objects:
                     obj['tags'] = [tag.name for tag in col.asset_data.tags]                 
-                    break
-        
+                    break                    
+
         context.scene['variation_groups'] = variation_groups
         ##########
         # EXPORT #

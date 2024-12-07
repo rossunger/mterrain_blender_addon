@@ -1,6 +1,50 @@
 import bpy
 import bpy_extras
+import bmesh
 
+class ColorPaletteItem(bpy.types.PropertyGroup):
+    def update_color(self,context):
+        if not hasattr(context.scene.color_palette, "previews"):
+            context.scene.color_palette.previews = bpy.utils.previews.new()
+        previews = context.scene.color_palette.previews
+        if not self.icon_name in previews:                    
+            icon = previews.load(self.icon_name, "", 'IMAGE')
+            icon.icon_size = (32,32)
+            icon.image_size = (32,32)
+        else:
+            icon = previews[self.icon_name]        
+        icon.icon_pixels_float = [self.color[0], self.color[1], self.color[2], self.color[3], ] * (32*32)
+        icon.image_pixels_float = [self.color[0], self.color[1], self.color[2], self.color[3], ] * (32*32)
+        self.icon_id = icon.icon_id
+        
+        # UPDATE faces that had the old color        
+        e = 0.075
+        original_mode = context.object.mode
+        bpy.ops.object.mode_set(mode="OBJECT")        
+        for obj in bpy.data.objects:            
+            if obj.type !="MESH": continue     
+            if not "face_color" in obj.data.color_attributes: continue
+            for i, loop in enumerate(obj.data.color_attributes['face_color'].data):                                        
+                if abs(loop.color[0] - self.old_color[0]) < e and abs(loop.color[1] - self.old_color[1]) < e and abs(loop.color[2] - self.old_color[2]) < e and abs(loop.color[3] - self.old_color[3]) < e:                                                         
+                    loop.color[0] = self.color[0]                    
+                    loop.color[1] = self.color[1]                    
+                    loop.color[2] = self.color[2]                    
+                    loop.color[3] = self.color[3]                    
+        bpy.ops.object.mode_set(mode=original_mode)                
+        self.old_color[0] = self.color[0]
+        self.old_color[1] = self.color[1]
+        self.old_color[2] = self.color[2]
+        self.old_color[3] = self.color[3]
+
+    color: bpy.props.FloatVectorProperty(size=4, subtype="COLOR", default=(0.,0.,0.,1.), min=0.0, max=1.0, update=update_color)        
+    old_color: bpy.props.FloatVectorProperty(size=4, subtype="COLOR", default=(0.,0.,0.,1.), min=0.0, max=1.0)        
+    icon_id: bpy.props.IntProperty()
+    icon_name: bpy.props.StringProperty()
+
+class ColorPalette(bpy.types.PropertyGroup):
+    colors: bpy.props.CollectionProperty(type=ColorPaletteItem)
+    edit_locked: bpy.props.BoolProperty(default=True)    
+    previews = bpy.utils.previews.new()
 class StringItem(bpy.types.PropertyGroup):
     value: bpy.props.StringProperty(name="Value")
 
@@ -76,8 +120,7 @@ class MeshLods(bpy.types.PropertyGroup):
     material_set_count: bpy.props.IntProperty(default=0)
     lod_count: bpy.props.IntProperty(default=0)
     lods_editable: bpy.props.BoolProperty(default =True)
-    material_sets_editable: bpy.props.BoolProperty(default =True)
-    
+    material_sets_editable: bpy.props.BoolProperty(default =True)    
     variations: bpy.props.CollectionProperty(type=VariationObject)
     
     def replace_lod_mesh(self, context):
@@ -139,6 +182,10 @@ def set_active_lod(obj, lod):
     if not obj.type == 'MESH': return      
     new_obj = confirm_or_make_overrides(obj,lod)    
     mesh = [x for x in new_obj.mesh_lods.lods if x.lod == lod][0].mesh        
+    for x in new_obj.mesh_lods.lods:
+        m = x.mesh
+        if x.lod==1:
+            print("AAA")
     new_obj.data = mesh
     new_obj.mesh_lods.active_lod = lod
     activate_material_set(obj, obj.mesh_lods.active_material_set_id)

@@ -10,14 +10,20 @@ class OBJECT_OT_drag_drop_asset(bpy.types.Operator):
 
     def modal(self, context, event):
         if event.type == 'LEFTMOUSE' and event.value=='RELEASE':                                    
+            new_object_name = None            
             with bpy.data.libraries.load(context.asset.full_library_path, assets_only = True, link = True) as (data_from, data_to):
                 for i, obj in enumerate(data_from.objects):                
                     if obj == context.asset.name:
                         data_to.objects.append(data_from.objects[i])                
+                        new_object_name = data_from.objects[i]
                         print(obj)
-            for obj in data_to.objects:
-                print(obj)
-                #bpy.context.scene.collection.objects.link(obj)
+            if new_object_name in bpy.data.objects:
+                self.report({"INFO"}, "Imported object: " + new_object_name)
+                obj = bpy.data.objects[new_object_name]
+                if not obj.override_library:
+                    obj.override_create()
+                    for mesh in [o.mesh for o in obj.mesh_lods.lods]:
+                        mesh.override_create()                
             return {'FINISHED'}
         elif event.type in {'RIGHTMOUSE', 'ESC'}:
             return {'CANCELLED'}

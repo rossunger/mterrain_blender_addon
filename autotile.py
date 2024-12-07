@@ -278,7 +278,7 @@ def build_house(context):
                     house.objects.link(roof_obj)
                     roof_obj.location = obj.location
                     roof_obj.location[2] += 3
-                    roof_obj.scale = obj.scale
+                    roof_obj.scale = obj.scale                    
                     roof_obj.rotation_euler = obj.rotation_euler                                
                 continue
             elif len(connected_angle_faces) == 1:                 
@@ -514,12 +514,35 @@ def build_house(context):
                                 else:                                                                
                                     pass
                         if add_roof:
-                            roof_obj = bpy.data.objects["roof_angle_joiner"].copy()
+                            roof_obj = bpy.data.objects["roof_angle_filler"].copy()
                             house.objects.link(roof_obj)
                             roof_obj.location = obj.location
                             roof_obj.location[2] += 3
-                            roof_obj.scale = obj.scale
+                            roof_obj.scale = obj.scale                            
                             roof_obj.rotation_euler.z = obj.rotation_euler.z
+                            if not is_horizontal:
+                                if is_above:                                    
+                                    if is_left:                                                                             
+                                        roof_obj.rotation_euler.z -= math.pi*0.5
+                                    else:                                       
+                                        roof_obj.rotation_euler.z += math.pi*0.5
+                                else:                                    
+                                    if is_left:                                                                             
+                                        roof_obj.rotation_euler.z += math.pi*0.5
+                                    else:                                       
+                                        roof_obj.rotation_euler.z -= math.pi*0.5
+                            else:    
+                                
+                                if is_above:                     
+                                    if is_left:                                                                             
+                                        roof_obj.rotation_euler.z += math.pi*0.5
+                                    else:                                                                                
+                                        roof_obj.rotation_euler.z -= math.pi*0.5
+                                else:                                    
+                                    if is_left:                                                                             
+                                        roof_obj.rotation_euler.z -= math.pi*0.5
+                                    else:                                                                  
+                                        roof_obj.rotation_euler.z += math.pi*0.5
                                                             
 
     def select_corner_inside():
@@ -642,15 +665,46 @@ def build_house(context):
                 obj = bpy.data.objects["wall_internal_none"].copy()
                 house.objects.link(obj)
                 obj.location = bottom_left_vert.co
-                #obj.location.y-=1
-                #obj.location.x-=1
+
                 if add_roof:                    
-                    roof_obj = bpy.data.objects["roof_middle_flat"].copy()
-                    house.objects.link(roof_obj)
-                    roof_obj.location = obj.location
-                    roof_obj.location[2] +=3.7
-                    roof_obj.scale = obj.scale
-                    roof_obj.rotation_euler = obj.rotation_euler            
+                    #if any neighbour is an angel wall, then we need corner roof
+                    area, verts, faces = get_9(face)                     
+                    empty_face_vertices = [v for v in face.verts if len(v.link_faces)==3]
+                    if len(empty_face_vertices) > 1:                        
+                        pass #ERROR
+                    elif len(empty_face_vertices) == 1:
+                        roof_obj = bpy.data.objects["roof_corner_middle_flat"].copy()
+                        house.objects.link(roof_obj)
+                        roof_obj.location = obj.location
+                        roof_obj.location[2] +=3.1165
+                        roof_obj.scale = obj.scale
+                        roof_obj.rotation_euler = obj.rotation_euler            
+                        
+                        empty_vertex = empty_face_vertices[0]
+                        opposite_vertex = [v for v in face.verts if abs(v.co[0]-empty_vertex.co[0])>0.01 and abs(v.co[1]-empty_vertex.co[1])>0.01][0]
+                        is_left = empty_vertex.co[0] < opposite_vertex.co[0]
+                        is_top = empty_vertex.co[1] < opposite_vertex.co[1]
+                        if is_left:
+                            if is_top:                                
+                                roof_obj.rotation_euler.z -= math.pi*0.5
+                                roof_obj.location.y += 1.
+                            else:                                
+                                roof_obj.rotation_euler.z += math.pi
+                                roof_obj.location.x += 1.
+                                roof_obj.location.y += 1.
+                        else:
+                            if is_top:                                
+                                pass                                
+                            else:                                
+                                roof_obj.rotation_euler.z += math.pi*0.5                            
+                                roof_obj.location.x += 1.
+                    else:
+                        roof_obj = bpy.data.objects["roof_middle_flat"].copy()
+                        house.objects.link(roof_obj)
+                        roof_obj.location = obj.location
+                        roof_obj.location[2] +=3.7
+                        roof_obj.scale = obj.scale
+                        roof_obj.rotation_euler = obj.rotation_euler            
         #bpy.data.objects["wall_internal_straight"]
         #bpy.data.objects["wall_internal_none"]
         #bpy.data.objects["wall_internal_corner"]

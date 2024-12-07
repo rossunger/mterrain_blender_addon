@@ -13,6 +13,9 @@ from .export import *
 from .properties import *
 from.autotile import MTerrain_OT_convert_tilemap_to_instances, MTerrain_OT_prepare_tilemap_for_painting
 import mathutils
+import gpu
+from gpu_extras.batch import batch_for_shader
+import bmesh
 
 class MTerrain_OT_Fix_Collection_Offsets(bpy.types.Operator):
     bl_idname = "mterrain.fix_collection_offsets"
@@ -52,6 +55,22 @@ def get_first_lod(name):
 ########
 ## UI ##
 ########
+def draw_color_button(layout, operator_idname, color=(0.,0.,0.,1.)):
+    row = layout.row(align=True)
+    row.scale_y = 2.0
+    op = row.operator(operator_idname, text="", emboss=False)
+
+    def draw_callback():
+        region = bpy.context.region
+        shader = gpu.shader.from_builtin('FLAT_COLOR')
+        verts = [(0,0),(0,50), (100,50), (100,0)]
+        indices = [(0,1,2), (2,3,0)]
+        batch = batch_for_shader(shader,'TRIS', {"pos":verts, "color": color}, indices=indices)
+        shader.bind()
+        #shader.uniform_float("color", color)
+        batch.draw(shader)
+    bpy.types.SpaceView3D.draw_handler_add(draw_callback, (), "WINDOW", "POST_PIXEL")
+
 class MTerrain_PT_Tool(bpy.types.Panel):
     bl_label = 'MTerrain'
     bl_idname = 'mterrain.panel'
@@ -85,8 +104,28 @@ class MTerrain_PT_Tool(bpy.types.Panel):
             build_variations_layout(layout, obj)                                    
             build_lod_layout(layout,obj)                
             build_material_sets_layout(layout, obj)
-
-            
+        
+        if not "face_color" in context.object.data.color_attributes:
+            layout.separator()            
+            layout.operator(OBJECT_OT_Make_Palette_Material.bl_idname, text="Create Color Palette Material")
+        else:
+            layout.separator()            
+            col = layout.column()
+            row = col.row()
+            row.label(text="Color Palette")
+            row.prop(context.scene.color_palette, "edit_locked", text="", icon="LOCKED")
+            grid = col.grid_flow(columns = 8, align=True)                                                            
+            for i, color in enumerate(context.scene.color_palette.colors):
+                #box.operator(OBJECT_OT_update_color_in_palette.bl_idname, )                
+                if context.scene.color_palette.edit_locked:                                          
+                    op = grid.operator(OBJECT_OT_Set_Face_Color.bl_idname, text="", icon_value=color.icon_id, emboss=True)
+                    op.color = color.color
+                    
+                else:                    
+                    row = col.row(align=True)
+                    row.prop(color, "name", text="")
+                    row.prop(color, "color", text="")
+            col.operator(OBJECT_OT_add_color_to_palette.bl_idname, text="", icon="ADD")
             #layout.label(text=str(obj.material_sets.sets))
             #for idx, array in enumerate(obj.material_sets.sets):          
                 #layout.label(text=str(array))
@@ -122,7 +161,7 @@ def build_lod_layout(layout, obj):
                 bpy.app.timers.register(partial(validate_active_lod, obj), first_interval=0.01)
                 return
         row = col.row(align=True)
-        if obj.mesh_lods.lods_editable:                            
+        if obj.mesh_lods.lods_editable and not obj.override_library and not obj.library:                            
             split = row.split(factor=0.7, align=True)
             split.operator(OBJECT_OT_activate_lod.bl_idname, text="Lod " + str(mesh_lod.lod), icon=icon, depress=mesh_lod.lod==obj.mesh_lods.active_lod).lod = mesh_lod.lod                                        
             split.prop(mesh_lod, "lod", text="")                
@@ -130,17 +169,17 @@ def build_lod_layout(layout, obj):
             op = row.operator(OBJECT_OT_remove_mesh_lod.bl_idname, icon="REMOVE", text="")                                
         else:                    
             row.operator(OBJECT_OT_activate_lod.bl_idname, text="Lod " + str(mesh_lod.lod), icon=icon, depress=mesh_lod.lod==obj.mesh_lods.active_lod).lod = mesh_lod.lod                                        
-    if obj.mesh_lods.lods_editable:                                                                                        
+    if obj.mesh_lods.lods_editable and not obj.override_library and not obj.library:                                                                                        
         op = col.operator(OBJECT_OT_add_lod.bl_idname, icon="ADD", text="")              
     
     row = layout.row()
     row.alignment = 'CENTER'       
-    if obj.mesh_lods.lods_editable:                             
+    if obj.mesh_lods.lods_editable and not obj.override_library and not obj.library:                             
         row.label(text="Import Lod From Object")      
         layout.prop(obj.mesh_lods, "object_for_replacing_lod_mesh", text="", )
     layout.separator(type="LINE")
 
-    if obj.mesh_lods.lods_editable:
+    if obj.mesh_lods.lods_editable and not obj.override_library and not obj.library:
         row = layout.row()
         row.alignment = 'CENTER'                  
         row.label(text="Surface Names")                            
@@ -209,25 +248,26 @@ def build_variations_layout(layout, obj):
     col = layout.column(align=True)
     variation_list =[v for v in obj.mesh_lods.variations]                
     row = col.row()
-    row.label(text="Variations")    
-    row.operator(OBJECT_OT_replace_with_object.bl_idname, text="", icon="EYEDROPPER") 
-    row.operator(OBJECT_OT_flip_local_x_around_center.bl_idname, text="", icon="MOD_MIRROR") 
-    if obj.override_library:
-        variation_list.append({"name": obj.override_library.reference.name})    
+    row.label(text="Variations")        
+    if obj.override_library:        
+        row.operator(OBJECT_OT_replace_with_object.bl_idname, text="", icon="EYEDROPPER") 
+        row.operator(OBJECT_OT_flip_local_x_around_center.bl_idname, text="", icon="MOD_MIRROR") 
+        col.template_icon_view(obj, "variations_enum")
     else:
+        variation_list =[v for v in obj.mesh_lods.variations]                
         variation_list.append({"name": obj.name})
-    variation_list.sort(key=lambda x: x['name'])    
-    for variation in variation_list:
-        row = col.row(align=True)                        
-        if hasattr(variation, "obj"):        
-            row.context_pointer_set("new_variation", variation)                                                                                        
-            row.context_pointer_set("obj", obj)     
-            op = row.operator(OBJECT_OT_activate_variation.bl_idname, text=variation.name, ) #, icon_value=variation.obj.preview.icon_id if variation.obj.preview else None )
-            row.operator(OBJECT_OT_remove_variation.bl_idname, text="", icon="REMOVE")
-        else:
-            col.operator(DUMMY_OT_button.bl_idname, text=variation['name'], depress=True)            
-        #icon = row.template_icon(icon_value=variation.obj.preview.icon_id, scale=2)
-    col.operator(OBJECT_OT_add_variation.bl_idname, text="", icon="ADD")
+        variation_list.sort(key=lambda x: x['name'])   
+                    
+        for variation in variation_list:
+            row = col.row(align=True)                        
+            if hasattr(variation, "obj"):        
+                row.context_pointer_set("new_variation", variation)                                                                                        
+                #row.context_pointer_set("obj", obj)     
+                op = row.operator(OBJECT_OT_activate_variation.bl_idname, text=variation.name ) #, icon_value=variation.obj.preview.icon_id if variation.obj.preview else None )            
+                row.operator(OBJECT_OT_remove_variation.bl_idname, text="", icon="REMOVE")
+            else:
+                col.operator(DUMMY_OT_button.bl_idname, text=variation['name'], depress=True)                    
+        col.operator(OBJECT_OT_add_variation.bl_idname, text="", icon="ADD")
 
 ############
 # MESH LOD #
@@ -286,11 +326,15 @@ class OBJECT_OT_add_lod(bpy.types.Operator):
     def execute(self, context):        
         all_lod = [m.lod for m in context.object.mesh_lods.lods]        
         lod = context.object.mesh_lods.lods.add()        
-        lod.lod = max(all_lod) + 1                        
         lod.mesh = context.object.data.copy()
+        lod.lod = max(all_lod) + 1                        
+        
         #lod.mesh.use_fake_user = True
         lod.mesh.name = context.object.name + "_lod_" + str(lod.lod)
         context.object.mesh_lods.lod_count += 1
+        for l in context.object.mesh_lods.lods:
+            z = l
+            print(l.lod)
         bpy.ops.mterrain.activate_mesh_lod(lod = lod.lod)        
         return {'FINISHED'}
 
@@ -472,15 +516,176 @@ class OBJECT_OT_ActivateMaterialSet(bpy.types.Operator):
             self.report({"INFO"}, "Material set already active!")
         activate_material_set(context.object, self.set_id)
         return {'FINISHED'}    
+
+class OBJECT_OT_Set_Face_Color(bpy.types.Operator):
+    bl_idname = "mterrain.set_face_color"
+    bl_label = "set face color"
+    bl_options = {"REGISTER", "UNDO"}
+    attribute_name: bpy.props.StringProperty(default="face_color")
+    color: bpy.props.FloatVectorProperty(size=4, subtype="COLOR")
+    @classmethod
+    def description(self, context, properties):
+        return context.color.name
+    @classmethod
+    def poll(self, context):
+        return True#context.object and context.mode == "EDIT_MESH" and context.object.data.total_face_sel > 0
+    
+    def invoke(self, context, event):
+        if event.ctrl or event.alt or event.shift:
+            add_to_selection = event.shift
+            remove_from_selection = event.alt
+            select_face_by_color(attribute_name = self.attribute_name, target_color = self.color, add_to_selection=add_to_selection, remove_from_selection=remove_from_selection)
+        else:
+            set_face_color(attribute_name = self.attribute_name, target_color = self.color)
+        return({"CANCELLED"})
+
+def select_face_by_color(attribute_name = "face_color", target_color = (0.99,0.0, 0.0, 1.0), add_to_selection=False, remove_from_selection=False):    
+    obj = bpy.context.object    
+    if obj.type == 'MESH':        
+        bpy.ops.object.mode_set(mode='EDIT')
+        bm = bmesh.from_edit_mesh(obj.data)
+        # Ensure a color attribute exists
+        color_layer = bm.loops.layers.color.get(attribute_name)
+        if not color_layer:
+            return                            
+
+        for face_index, face in enumerate(bm.faces):                
+            for loop in face.loops:
+                e = 0.005
+                if abs(loop[color_layer][0] - target_color[0]) < e and abs(loop[color_layer][1] - target_color[1]) < e and abs(loop[color_layer][2] - target_color[2]) < e and abs(loop[color_layer][3] - target_color[3]) < e:     
+                    if not remove_from_selection:
+                        face.select = True
+                    else:
+                        face.select = False
+                        
+                else:
+                    if not add_to_selection and not remove_from_selection:
+                        face.select = False
+
+        # Update the bmesh and exit edit mode
+        bmesh.update_edit_mesh(obj.data)
+
+
+def set_face_color(attribute_name = "face_color", target_color = (0.99,0.0, 0.0, 1.0)):
+    # Get the active object (make sure it's a mesh)
+    obj = bpy.context.object
+
+    # Ensure we're working with a mesh
+    if obj.type == 'MESH':
+        # Enter edit mode and get the bmesh representation
+        bpy.ops.object.mode_set(mode='EDIT')
+        bm = bmesh.from_edit_mesh(obj.data)
+
+        # Ensure a color attribute exists or create one
+        color_layer = bm.loops.layers.color.get(attribute_name)
+        if not color_layer:
+            color_layer = bm.loops.layers.color.new(attribute_name)
+
+        # Iterate over the faces to set color
+        target_face_index = 0  # Replace with the desired face index
         
+
+        for face_index, face in enumerate(bm.faces):
+            if face.select:
+    #        if face_index == target_face_index:
+                for loop in face.loops:
+                    loop[color_layer] = target_color                
+
+        # Update the bmesh and exit edit mode
+        bmesh.update_edit_mesh(obj.data)
+
+class OBJECT_OT_add_color_to_palette(bpy.types.Operator):
+    bl_idname = "mterrain.add_color_to_palette"
+    bl_label = "add_color_to_palette"
+    bl_options = {"REGISTER", "UNDO"}
+    color: bpy.props.FloatVectorProperty(size=4, subtype="COLOR", default=(0.,0.,0.,1.))
+    new_name: bpy.props.StringProperty(default="new_color")
+    
+    def execute(self, context):             
+        color = context.scene.color_palette.colors.add()
+        color.color = self.color        
+        color.name = self.new_name
+        color.icon_name = str(len(context.scene.color_palette.colors))
+        return {'FINISHED'}            
+
+class OBJECT_OT_Make_Palette_Material(bpy.types.Operator):
+    bl_idname = "mterrain.make_palette_material"
+    bl_label = "make_palette_material"
+    bl_options = {"REGISTER", "UNDO"}    
+    
+    def execute(self, context):                     
+        if not "color_palette" in bpy.data.materials:
+            mat = bpy.data.materials.new("color_palette")
+            mat.use_nodes = True
+            tree = mat.node_tree    
+            color_attribute = tree.nodes.new("ShaderNodeVertexColor")
+            color_attribute.layer_name = "face_color"
+            tree.links.new(color_attribute.outputs[0], tree.nodes['Principled BSDF'].inputs[0])
+        mat = bpy.data.materials['color_palette']
+        context.object.data.materials.clear()
+        mat = context.object.data.materials.append(mat)
+                
+        if not "face_color" in context.object.data.color_attributes:            
+            context.object.data.color_attributes.new("face_color", "BYTE_COLOR", "CORNER")
+
+        return {'FINISHED'}    
+
+class OBJECT_OT_update_color_in_palette(bpy.types.Operator):
+    bl_idname = "mterrain.update_color_in_palette"
+    bl_label = "update_color_in_palette"
+    bl_options = {"REGISTER", "UNDO"}
+    index: bpy.props.IntProperty()
+    new_name: bpy.props.StringProperty()
+    new_color: bpy.props.FloatVectorProperty(size=4, subtype="COLOR")
+    def execute(self, context):     
+        context.scene['color_palette'][index] = self.new_color
+        context.scene['color_palette'][name] = self.new_name
+        return {'FINISHED'}            
+
+class OBJECT_OT_bake_surface_id_to_vertex_color_r(bpy.types.Operator):
+    bl_idname = "mterrain.bake_surface_id_to_vertex_color_r"
+    bl_label = "bake_surface_id_to_vertex_color_r"
+    bl_options = {"REGISTER", "UNDO"}    
+    attribute_name: bpy.props.StringProperty(default="SurfaceID")
+    @classmethod
+    def poll(self, context):
+        return context.object and context.mode == "EDIT"
+    
+    def execute(self, context):     
+        bake_surface_id_to_vertex_color_r(color_attribute_name = self.attribute_name)
+        return {'FINISHED'}            
+
+def bake_surface_id_to_vertex_color_r(color_attribute_name = "SurfaceID"):
+    # Settings    
+    max_surfaces = 64  # Maximum surface IDs
+
+    # Get the active object
+    obj = bpy.context.object
+
+    # Ensure the object is a mesh
+    if obj.type != 'MESH':
+        raise ValueError("Active object must be a mesh")
+
+    # Access or create the color attribute
+    color_attribute = obj.data.color_attributes.get(color_attribute_name)
+    if not color_attribute:
+        color_attribute = obj.data.color_attributes.new(name=color_attribute_name, type='FLOAT_COLOR', domain='CORNER')
+
+    # Iterate over faces and set the red channel for each corner
+    for poly in obj.data.polygons:
+        for loop_idx in poly.loop_indices:
+            surface_id = poly.material_index / (max_surfaces - 1) if poly.material_index!=0 or max_surfaces ==1 else 0
+            obj.data.color_attributes[color_attribute_name].data[loop_idx].color = (surface_id, 0.0,0.0,1.0)
+
+
+
 ##############
 # VARIATIONS #
 ##############  
 class OBJECT_OT_replace_with_object(bpy.types.Operator):
     bl_idname = "mterrain.replace_object"
     bl_label = "replace object with another object"
-    bl_options = {"REGISTER", "UNDO"}
-    bl_description = "AAA"
+    bl_options = {"REGISTER", "UNDO"}    
     @classmethod
     def poll(self, context):
         return context.object and len(context.object.mesh_lods.lods)>0 and context.object.override_library
@@ -592,8 +797,7 @@ class OBJECT_OT_add_variation(bpy.types.Operator):
     bl_idname = "mterrain.add_variation"
     bl_label = "Add variation for object"    
     bl_options = {"REGISTER", "UNDO"}
-    
-    
+        
     def modal(self, context, event):
         obj = None
         if event.type == 'LEFTMOUSE' and event.value=='RELEASE':                                    
@@ -631,7 +835,10 @@ class OBJECT_OT_add_variation(bpy.types.Operator):
             return {'CANCELLED'}
         return {'RUNNING_MODAL'}
 
-    def invoke(self, context, event):                
+    def invoke(self, context, event):          
+        #Fix fake variation created when duplicating object
+        if len(context.object.mesh_lods.variations) >0 and not context.object in [v.obj for v in context.object.mesh_lods.variations[0].obj.mesh_lods.variations]:      
+            context.object.mesh_lods.variations.clear()
         context.window.cursor_set('EYEDROPPER')
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}        
@@ -653,12 +860,17 @@ class OBJECT_OT_remove_variation(bpy.types.Operator):
         
         return {'FINISHED'}
 
+def update_variation(self, context):
+    if context.object.variations_enum == context.object.name: return
+    variation = [v for v in context.object.mesh_lods.variations if v.name == context.object.variations_enum][0]
+    with context.temp_override(new_variation=variation):
+        bpy.ops.mterrain.activate_variation()
 
 class OBJECT_OT_activate_variation(bpy.types.Operator):
     bl_idname = "mterrain.activate_variation"
     bl_label = "Activate variation for object"    
     bl_options = {"REGISTER", "UNDO"}
-    material_set_id: bpy.props.IntProperty(min=0)
+    material_set_id: bpy.props.IntProperty(default=0, min=0)
     
     @classmethod
     def poll(self, context):
@@ -670,7 +882,7 @@ class OBJECT_OT_activate_variation(bpy.types.Operator):
         return True
 
     def execute(self, context):       
-        if not hasattr(context.new_variation, "obj") or context.new_variation.obj == context.obj: 
+        if not hasattr(context.new_variation, "obj") or context.new_variation.obj == context.object: 
             self.report({'INFO'}, "Variation already active!")
             return {'CANCELLED'}
         obj = context.object
@@ -679,12 +891,12 @@ class OBJECT_OT_activate_variation(bpy.types.Operator):
         if not obj.override_library:     
             for o in context.selected_objects:
                 o.select_set(False)
-            
-            if not obj.name in context.view_layer.objects:
-                context.scene.collection.objects.link(obj)
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            activate_material_set(obj, self.material_set_id)        
+            new_obj = context.new_variation.obj
+            if not new_obj.name in context.view_layer.objects:
+                context.scene.collection.objects.link(new_obj)
+            new_obj.select_set(True)
+            bpy.context.view_layer.objects.active = new_obj
+            activate_material_set(new_obj, self.material_set_id)        
         else:
             context.new_variation.obj = replace_object_with_object(context, context.object, context.new_variation.obj)
         return {'FINISHED'}
@@ -725,6 +937,26 @@ class DUMMY_OT_button(bpy.types.Operator):
     def execute(self, context):        
         return {'FINISHED'}
 
+def get_variations_enum(self, context):
+    obj = context.object
+    variation_list =[v for v in obj.mesh_lods.variations]                    
+    if obj.override_library:
+        variation_list.append({"name": obj.override_library.reference.name, "obj": obj})    
+    else:
+        variation_list.append({"name": obj.name, "obj": obj})
+    variation_list.sort(key=lambda x: x['name'])          
+    result = []
+    passed_current_id = False
+    for i, variation in enumerate(variation_list):
+        variation['obj'].preview_ensure()
+        if variation['obj'] == obj:
+            result.append((str(-1),variation['obj'].name,variation['obj'].name, variation['obj'].preview.icon_id, i))
+            passed_current_id = True
+        else:
+            variation_id = i if not passed_current_id else i-1
+            result.append((variation['obj'].name,variation['obj'].name,variation['obj'].name, variation['obj'].preview.icon_id, i))
+    return result 
+
 def depsgraph_update_post(scene):        
     old_object_names = scene.scene_objects.split(",")    
     object_names = [obj.name for obj in scene.objects if obj.name in bpy.data.objects]
@@ -749,9 +981,12 @@ def menu_func_export(self, context):
 addon_keymaps= []
 def register():
     classes = [        
-        VariationObject,        
+        VariationObject,         
         MeshLod,
         MeshLods,
+        ColorPaletteItem,
+        ColorPalette,
+        
         
         OBJECT_OT_convert_to_lod_object,
         OBJECT_OT_add_lod,
@@ -787,6 +1022,12 @@ def register():
 
         OBJECT_OT_flip_local_x_around_center,
         OBJECT_OT_replace_with_object,
+
+        OBJECT_OT_Set_Face_Color, 
+        OBJECT_OT_add_color_to_palette, 
+        OBJECT_OT_update_color_in_palette, 
+        OBJECT_OT_bake_surface_id_to_vertex_color_r,
+        OBJECT_OT_Make_Palette_Material
     ]                
     for c in classes:
         bpy.utils.register_class(c)    
@@ -794,12 +1035,19 @@ def register():
     bpy.types.WorkSpace.selected_asset = bpy.props.IntProperty(
         name="selected_asset", default=0         
     )       
-    bpy.types.Scene.scene_objects = bpy.props.StringProperty()
+    bpy.types.Scene.scene_objects = bpy.props.StringProperty()            
     bpy.types.Mesh.material_sets = bpy.props.PointerProperty(type=MaterialSets) 
     bpy.types.Object.mesh_lods = bpy.props.PointerProperty(type=MeshLods)             
-    props = [bpy.types.WorkSpace.selected_asset, bpy.types.Mesh.material_sets, bpy.types.Scene.scene_objects]
+    bpy.types.Object.variations_enum = bpy.props.EnumProperty(items=get_variations_enum, override={"LIBRARY_OVERRIDABLE"}, update=update_variation)    
+    bpy.types.Scene.color_palette = bpy.props.PointerProperty(type=ColorPalette)
+    props = [bpy.types.WorkSpace.selected_asset, 
+        bpy.types.Mesh.material_sets, 
+        bpy.types.Scene.scene_objects, 
+        bpy.types.Object.variations_enum, 
+        bpy.types.Scene.color_palette
+    ]
     #bpy.types.ASSETSHELF_PT_display.append(MTerrain_PT_Tool.draw)
-    bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
+    #bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
     
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
     # Asset Shelf
@@ -816,7 +1064,7 @@ def unregister():
     for prop in props:
         del prop
     #bpy.types.ASSETSHELF_PT_display.remove(MTerrain_PT_Tool.draw)
-    bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_post)    
+    #bpy.app.handlers.depsgraph_update_post.remove(depsgraph_update_post)    
 
     bpy.context.window_manager.keyconfigs.addon.keymaps.remove(addon_keymaps[0])    
 
