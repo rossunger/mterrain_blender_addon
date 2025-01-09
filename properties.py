@@ -45,22 +45,37 @@ class ColorPalette(bpy.types.PropertyGroup):
     colors: bpy.props.CollectionProperty(type=ColorPaletteItem)
     edit_locked: bpy.props.BoolProperty(default=True)    
     previews = bpy.utils.previews.new()
+
+class TileMaterial(bpy.types.PropertyGroup):
+    material: bpy.props.PointerProperty(type=bpy.types.Material)
+
 class StringItem(bpy.types.PropertyGroup):
     value: bpy.props.StringProperty(name="Value")
 
 class MaterialItem(bpy.types.PropertyGroup):
     material: bpy.props.PointerProperty(type=bpy.types.Material)
+    
+    def get_tiles(self, context):
+        result = []
+        for i, mat in enumerate(context.scene.texture_array_materials):
+            result.append((str(i), mat.material.name, mat.material.name, mat.material.preview.icon_id, i))
+        return result
+
+    def update_tile(self, context):
+        self.material = context.scene.texture_array_materials[int(self.material_tile_id)].material    
+    material_tile_id: bpy.props.EnumProperty(items=get_tiles, override={"LIBRARY_OVERRIDABLE"}, update=update_tile)
 
 class MaterialSet(bpy.types.PropertyGroup):
     materials: bpy.props.CollectionProperty(type=MaterialItem)
     name: bpy.props.StringProperty(default="material set")
     material_set_id: bpy.props.IntProperty(min=0)
-
+        
 class MaterialSets(bpy.types.PropertyGroup):
     surface_names: bpy.props.CollectionProperty(type=StringItem)    
     sets: bpy.props.CollectionProperty(type=MaterialSet)    
     collapsed_panels: bpy.props.BoolVectorProperty()
     next_material_set_id: bpy.props.IntProperty(min=0)
+    use_tiles: bpy.props.BoolProperty(default=False)
     #surfaces_editable: bpy.props.BoolProperty(default=True)
 
 class VariationObject(bpy.types.PropertyGroup):        

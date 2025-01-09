@@ -17,13 +17,16 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
         original_selection = context.selected_objects
         nothing_selected = False
         context.scene['blend_file'] = os.path.basename(bpy.data.filepath)        
+
+        objects_to_consider = [obj for obj in context.view_layer.objects if not obj.hide_get(view_layer=context.view_layer) and obj.name in context.view_layer.objects ]
+
         #toggle_lods_hidden(False)
         #####################################
         ## if nothing selected, select all ##
         #####################################
         if len(context.selected_objects)==0:
             nothing_selected = True
-            original_selection = context.scene.objects
+            original_selection = objects_to_consider
             for obj in original_selection:                
                 for col in obj.users_collection:
                     if col.asset_data:
@@ -32,13 +35,13 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
         variation_objects_process = []
         material_to_delete = []
         objects_to_delete = []
-        for obj in context.scene.objects:                   
+        for obj in objects_to_consider:                   
             if not obj.name in variation_objects_process:
                 variation_group = [v.name for v in obj.mesh_lods.variations]
                 variation_group.append(obj.name)
                 variation_objects_process += variation_group
                 variation_groups.append(variation_group)
-        for obj in context.scene.objects:                               
+        for obj in original_selection:                               
             #######################
             # Process Collections #
             #######################     
@@ -54,10 +57,18 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
             elif obj.override_library:
                 obj_name = obj.name if not "." in obj.name else obj.name.split(".")[0]                
                 new_obj = bpy.data.objects.new(obj_name, None)
+                context.scene.collection.objects.link(new_obj)
                 new_obj.select_set(True)
-                new_obj['blend_file'] = obj.override_library.reference.library.name
+                new_obj.parent = obj.parent
+                new_obj.location = obj.location
+                new_obj.scale = obj.scale
+                new_obj.rotation_euler = obj.rotation_euler
+                blend_file = obj.override_library.reference.library.name
+                if not blend_file.endswith(".blend"):
+                    blend_file = blend_file.split(".blend")[0] + ".blend"
+                new_obj['blend_file'] = blend_file
                 new_obj['active_material_set_id'] = obj.mesh_lods.active_material_set_id
-                obj.select_set(false)
+                obj.select_set(False)
                 objects_to_delete.append(new_obj)
                 pass
                 
@@ -120,6 +131,8 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                 export_image_format = 'NONE',
                 export_materials = 'EXPORT',
                 #export_colors = self.batch_export_colors,
+                export_attributes=True,
+                export_all_vertex_colors=True,
                 export_cameras = False,
                 export_extras = True,
                 export_yup = True,

@@ -55,22 +55,6 @@ def get_first_lod(name):
 ########
 ## UI ##
 ########
-def draw_color_button(layout, operator_idname, color=(0.,0.,0.,1.)):
-    row = layout.row(align=True)
-    row.scale_y = 2.0
-    op = row.operator(operator_idname, text="", emboss=False)
-
-    def draw_callback():
-        region = bpy.context.region
-        shader = gpu.shader.from_builtin('FLAT_COLOR')
-        verts = [(0,0),(0,50), (100,50), (100,0)]
-        indices = [(0,1,2), (2,3,0)]
-        batch = batch_for_shader(shader,'TRIS', {"pos":verts, "color": color}, indices=indices)
-        shader.bind()
-        #shader.uniform_float("color", color)
-        batch.draw(shader)
-    bpy.types.SpaceView3D.draw_handler_add(draw_callback, (), "WINDOW", "POST_PIXEL")
-
 class MTerrain_PT_Tool(bpy.types.Panel):
     bl_label = 'MTerrain'
     bl_idname = 'mterrain.panel'
@@ -87,14 +71,12 @@ class MTerrain_PT_Tool(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout                        
         layout.operator(MTerrain_OT_ExportAsGLB.bl_idname, text='Export')          
-        layout.separator()
-        #layout.operator(MTerrain_OT_Fix_Collection_Offsets.bl_idname, text="fix collection offset")                
+        layout.separator()        
         if not context.object or not context.selected_objects or len(context.selected_objects) == 0: 
             layout.operator(MTerrain_OT_prepare_tilemap_for_painting.bl_idname, text = "Make Tilemap")
             if False:
                 layout.operator(MTerrain_OT_convert_tilemap_to_instances.bl_idname, text = "Make Building")
-            return        
-        #layout.operator(MTerrain_OT_Convert_Selected_Objects_To_Assets.bl_idname, text="Convert selected to asset collections")
+            return                
         obj = context.object        
         if context.selected_objects and len(context.selected_objects)>1:
             layout.operator(OBJECT_OT_merge_variations.bl_idname, text="Merge variation groups")
@@ -226,8 +208,12 @@ def build_material_sets_layout(layout, obj):
                 row.prop(material_set, "name", text="")                        
                 row.operator(OBJECT_OT_RemoveMaterialSet.bl_idname, icon="REMOVE", text="").set_id = set_id
                 for surface_id, material in enumerate(material_set.materials):                                              
-                    row = col.row()                                
-                    row.prop(material, "material", text= obj.data.material_sets.surface_names[surface_id].value)                                
+                    row = col.row(align=True)                     
+                    if not obj.data.material_sets.use_tiles:
+                        row.prop(material, "material", text= obj.data.material_sets.surface_names[surface_id].value)             
+                    else:
+                        row.label(text=obj.data.material_sets.surface_names[surface_id].value)
+                        row.prop(material, "material_tile_id", text="")                   
                 col.separator()
             else:
                 row.context_pointer_set("obj", obj)
@@ -986,7 +972,7 @@ def register():
         MeshLods,
         ColorPaletteItem,
         ColorPalette,
-        
+        TileMaterial,
         
         OBJECT_OT_convert_to_lod_object,
         OBJECT_OT_add_lod,
@@ -1040,11 +1026,13 @@ def register():
     bpy.types.Object.mesh_lods = bpy.props.PointerProperty(type=MeshLods)             
     bpy.types.Object.variations_enum = bpy.props.EnumProperty(items=get_variations_enum, override={"LIBRARY_OVERRIDABLE"}, update=update_variation)    
     bpy.types.Scene.color_palette = bpy.props.PointerProperty(type=ColorPalette)
+    bpy.types.Scene.texture_array_materials = bpy.props.CollectionProperty(type=TileMaterial)
     props = [bpy.types.WorkSpace.selected_asset, 
         bpy.types.Mesh.material_sets, 
         bpy.types.Scene.scene_objects, 
         bpy.types.Object.variations_enum, 
-        bpy.types.Scene.color_palette
+        bpy.types.Scene.color_palette,
+        bpy.types.Scene.texture_array_materials
     ]
     #bpy.types.ASSETSHELF_PT_display.append(MTerrain_PT_Tool.draw)
     #bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
