@@ -87,6 +87,7 @@ class MTerrain_PT_Tool(bpy.types.Panel):
             build_lod_layout(layout,obj)                
             build_material_sets_layout(layout, obj)
         
+        if not hasattr(context.object.data, "color_attributes"): return
         if not "face_color" in context.object.data.color_attributes:
             layout.separator()            
             layout.operator(OBJECT_OT_Make_Palette_Material.bl_idname, text="Create Color Palette Material")

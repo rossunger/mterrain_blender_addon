@@ -155,7 +155,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                 obj.select_set(False)
             else:
                 obj.select_set(True)
-            if obj.type == 'MESH':
+            if obj.type == 'MESH' and len(obj.data.material_sets.sets) > 0:
                 activate_material_set(obj, obj.mesh_lods.active_material_set_id)
                             
         return {'FINISHED'}
