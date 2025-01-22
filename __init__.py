@@ -70,6 +70,14 @@ class MTerrain_PT_Tool(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout                        
+        #layout.prop(context.scene, "baker_path", text='baker scene')                  
+        if context.scene.baker_path == "":
+            layout.operator(MTerrain_OT_open_baker.bl_idname, text = "Open Baker")                            
+        else:
+            row = layout.row()
+            row.operator(MTerrain_OT_update_scene_from_tscn.bl_idname, text = "Reload from tscn" )
+            row.operator(MTerrain_OT_update_tscn_from_scene.bl_idname, text = "Save to tscn" )
+            row.operator(MTerrain_OT_close_baker.bl_idname, text = "Close Baker")
         layout.operator(MTerrain_OT_ExportAsGLB.bl_idname, text='Export')          
         layout.separator()        
         if not context.object or not context.selected_objects or len(context.selected_objects) == 0: 
@@ -984,6 +992,10 @@ def register():
         MaterialSet,
         MaterialSets,        
         MTerrain_OT_ExportAsGLB, 
+        MTerrain_OT_open_baker,
+        MTerrain_OT_close_baker,
+        MTerrain_OT_update_scene_from_tscn, 
+        MTerrain_OT_update_tscn_from_scene,
         #MTerrain_OT_Toggle_Lods_Hidden,         
         MTerrain_OT_Fix_Collection_Offsets, 
         MTerrain_PT_Tool,        
@@ -1023,6 +1035,7 @@ def register():
         name="selected_asset", default=0         
     )       
     bpy.types.Scene.scene_objects = bpy.props.StringProperty()            
+    bpy.types.Scene.baker_path = bpy.props.StringProperty()            
     bpy.types.Mesh.material_sets = bpy.props.PointerProperty(type=MaterialSets) 
     bpy.types.Object.mesh_lods = bpy.props.PointerProperty(type=MeshLods)             
     bpy.types.Object.variations_enum = bpy.props.EnumProperty(items=get_variations_enum, override={"LIBRARY_OVERRIDABLE"}, update=update_variation)    
@@ -1033,7 +1046,8 @@ def register():
         bpy.types.Scene.scene_objects, 
         bpy.types.Object.variations_enum, 
         bpy.types.Scene.color_palette,
-        bpy.types.Scene.texture_array_materials
+        bpy.types.Scene.texture_array_materials,
+        bpy.types.Scene.baker_path,
     ]
     #bpy.types.ASSETSHELF_PT_display.append(MTerrain_PT_Tool.draw)
     #bpy.app.handlers.depsgraph_update_post.append(depsgraph_update_post)
