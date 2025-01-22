@@ -47,7 +47,7 @@ When you import into godot's mterrain asset library it will be treated as a sing
 You can create multiple LOD meshes and multiple "material sets" inside one blender "object". You can link multiple "objects" into variation groups for easy swapping.
 
 To do this, add a mesh object in blender and then convert to LOD object:
-![[image.png]]
+![convert to lod image](https://raw.githubusercontent.com/rossunger/mterrain_blender_addon/master/image.png)
 
 Now that it is an LOD object, press the + under "Mesh Lods". This will duplicate the mesh, and assign it to the next LOD.
 
@@ -57,7 +57,7 @@ If you click the + under surface names, you can add another "surface" to this me
 
 If you click the + under "Material Sets" you can add another material set. When you activate a material set, each surface (aka material slot) gets populated with the corresponding material from the material set. This allows you to quicky swap between a group of materials.
 
-![[image-1.png]]
+![lod editing_tool_panel image](https://raw.githubusercontent.com/rossunger/mterrain_blender_addon/master/image-1.png)
 
 #### Scenes
 Once you've created assets, you can use those assets to build "scenes".
