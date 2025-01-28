@@ -94,8 +94,12 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                         new_object['surface_names'] = [m.value for i, m in enumerate(meshlod.mesh.material_sets.surface_names) if i in used_materials]                                    
                         print(new_object['surface_names'])
                         # Replace materials with temporary ones that have the correct slot names
-                        for i, slot in enumerate(new_object.material_slots):            
-                            if not i in used_materials: continue
+                        i = -1
+                        for slot in new_object.material_slots:            
+                            i+=1
+                            if not i in used_materials: 
+                                i -= 1
+                                continue
                             dummy_material_name = new_object['surface_names'][i]
                             if not dummy_material_name in bpy.data.materials:
                                 slot.material = bpy.data.materials.new(dummy_material_name)
@@ -129,7 +133,7 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                     obj['tags'] = [tag.name for tag in col.asset_data.tags]                 
                     break                    
 
-        context.scene['variation_groups'] = variation_groups
+        context.scene['variation_groups'] = [v for v in variation_groups if len(v)>1]
         ##########
         # EXPORT #
         ##########
