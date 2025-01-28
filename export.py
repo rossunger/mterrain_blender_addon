@@ -87,11 +87,18 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                         new_object_name = obj.name + "_lod_" + str(meshlod.lod)
                         new_object = bpy.data.objects.new(new_object_name, meshlod.mesh)                                                                          
                         objects_to_delete.append(new_object)
+
+                        used_materials = set()                        
+                        for poly in meshlod.mesh.polygons:
+                            used_materials.add(poly.material_index)
+                        new_object['surface_names'] = [m.value for i, m in enumerate(meshlod.mesh.material_sets.surface_names) if i in used_materials]                                    
+                        print(new_object['surface_names'])
                         # Replace materials with temporary ones that have the correct slot names
                         for i, slot in enumerate(new_object.material_slots):            
-                            dummy_material_name = new_object.data.material_sets.surface_names[i].value
+                            if not i in used_materials: continue
+                            dummy_material_name = new_object['surface_names'][i]
                             if not dummy_material_name in bpy.data.materials:
-                                slot.material = bpy.data.materials.new(new_object.data.material_sets.surface_names[i].value)
+                                slot.material = bpy.data.materials.new(dummy_material_name)
                             else:
                                 slot.material = bpy.data.materials[dummy_material_name]
                             if not slot.material in material_to_delete:
@@ -100,12 +107,13 @@ class MTerrain_OT_ExportAsGLB(bpy.types.Operator, ExportHelper):
                         for collection in obj.users_collection:
                             collection.objects.link(new_object)
                         new_object.select_set(True)
-
-                        new_object['surface_names'] = [m.value for m in meshlod.mesh.material_sets.surface_names]
+                        
                         material_sets = []                        
+                                                
                         for material_set in meshlod.mesh.material_sets.sets:
                             material_array = []
-                            for material in material_set.materials:
+                            for slot_id, material in enumerate(material_set.materials):
+                                if not slot_id in used_materials: continue
                                 if material.material:
                                     material_array.append(material.material.name)
                                 else:
